@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f7c8c">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Flugretter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one-screen phone app. Map fills the screen, a raised emergency button sits above a three-item bottom bar. */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --fg:#152033; --muted:#5d6b80; --line:#dde3ec;
+  --accent:#e2342b; --accent-ink:#ffffff; --accent-soft:#fde7e5;
+  --drone:#0f7c8c; --drone-soft:#dff2f4; --me:#2c63e0; --ok:#1d8a4e;
+  --map-land:#eef0ea; --map-block:#e3e6de; --map-road:#ffffff; --map-major:#f6dfa8; --map-park:#cfe6c4; --map-water:#bcd8ee;
+  --shadow:0 8px 24px rgba(21,32,51,.14);
+  --f-display:"Sora", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1420; --surface:#172030; --fg:#e8edf5; --muted:#9aa7bb; --line:#2a3548;
+  --accent:#ff5147; --accent-ink:#ffffff; --accent-soft:#3a1d1f;
+  --drone:#3cc3d4; --drone-soft:#143039; --me:#6b98ff; --ok:#4cc985;
+  --map-land:#1b2230; --map-block:#222b3b; --map-road:#334055; --map-major:#5a4c2c; --map-park:#1f3a2c; --map-water:#1c3550;
+  --shadow:0 8px 24px rgba(0,0,0,.45); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1420; --surface:#172030; --fg:#e8edf5; --muted:#9aa7bb; --line:#2a3548;
+  --accent:#ff5147; --accent-ink:#ffffff; --accent-soft:#3a1d1f;
+  --drone:#3cc3d4; --drone-soft:#143039; --me:#6b98ff; --ok:#4cc985;
+  --map-land:#1b2230; --map-block:#222b3b; --map-road:#334055; --map-major:#5a4c2c; --map-park:#1f3a2c; --map-water:#1c3550;
+  --shadow:0 8px 24px rgba(0,0,0,.45); color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--me);outline-offset:2px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0}
+.app{position:relative;height:100%;max-width:520px;margin:0 auto;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+@media (min-width:560px){.app{border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+
+/* ---------- Login ---------- */
+.login{flex:1;overflow:auto;display:flex;flex-direction:column;gap:28px;padding-block:40px 32px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+.brand{display:flex;align-items:center;gap:12px}
+.brand svg{width:46px;height:46px;flex:none}
+.brand b{font-family:var(--f-display);font-size:24px;font-weight:800;letter-spacing:-.02em}
+.brand small{display:block;color:var(--muted);font-size:13px}
+.login h1{font-size:28px;line-height:1.15;letter-spacing:-.02em}
+.login p.lead{color:var(--muted);margin:8px 0 0;line-height:1.5}
+.form{display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;color:var(--muted)}
+.field input,.field select{height:50px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);padding:0 14px;font-size:16px}
+.field input:focus{border-color:var(--me);outline:none}
+.btn{height:52px;border-radius:16px;border:0;font-weight:700;font-size:16px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 18px}
+.btn-primary{background:var(--fg);color:var(--bg)}
+.btn-ghost{background:transparent;border:1.5px solid var(--line)}
+.btn-danger{background:var(--accent);color:var(--accent-ink)}
+.switch-link{background:none;border:0;color:var(--me);font-weight:600;padding:6px 0}
+.err{color:var(--accent);font-size:14px;min-height:1em;margin:0}
+.demo-note{font-size:13px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;line-height:1.45}
+
+/* ---------- Views ---------- */
+.views{flex:1;position:relative;min-height:0}
+.view{position:absolute;inset:0;overflow:auto}
+.view.scroll{padding-block:20px 150px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* ---------- Map ---------- */
+.map{position:absolute;inset:0;overflow:hidden;background:var(--map-land);touch-action:none;cursor:grab}
+.map.dragging{cursor:grabbing}
+.map canvas,.map .tiles{position:absolute;inset:0}
+.tiles img{position:absolute;width:256px;height:256px;user-select:none;-webkit-user-drag:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tiles img{filter:invert(.92) hue-rotate(180deg) brightness(.95) contrast(.9)}}
+:root[data-theme="dark"] .tiles img{filter:invert(.92) hue-rotate(180deg) brightness(.95) contrast(.9)}
+.layer{position:absolute;inset:0;pointer-events:none}
+.layer #routeSvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.mk{position:absolute;transform:translate(-50%,-50%);pointer-events:auto}
+.mk-me{width:22px;height:22px;border-radius:50%;background:var(--me);border:3px solid var(--surface);box-shadow:0 0 0 0 var(--me);animation:ping 2s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--me) 55%,transparent)}100%{box-shadow:0 0 0 22px transparent}}
+.mk-st{display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);background:none;border:0;padding:0}
+.mk-st .pin{width:40px;height:40px;border-radius:12px;background:var(--drone);display:grid;place-items:center;box-shadow:var(--shadow);border:2px solid var(--surface)}
+.mk-st .pin svg{width:24px;height:24px}
+.mk-st .tag{margin-top:4px;background:var(--surface);color:var(--fg);font-size:12px;font-weight:700;padding:3px 8px;border-radius:8px;box-shadow:var(--shadow);white-space:nowrap}
+.mk-drone{width:46px;height:46px;border-radius:50%;background:var(--surface);display:grid;place-items:center;box-shadow:var(--shadow);border:2px solid var(--drone)}
+.mk-drone svg{width:30px;height:30px}
+.mk-drone .rot{animation:spin .25s linear infinite;transform-origin:center;transform-box:fill-box}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.mk-me,.mk-drone .rot{animation:none}}
+
+.topbar{position:absolute;top:0;left:0;right:0;display:flex;gap:10px;align-items:flex-start;padding-top:12px;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));pointer-events:none;z-index:5}
+.chip{pointer-events:auto;background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:10px 14px;display:flex;align-items:center;gap:10px;min-width:0}
+.chip .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);flex:none}
+.chip .dot.warn{background:#e0a020}
+.chip .t{font-size:13px;line-height:1.3;min-width:0}
+.chip .t b{display:block;font-size:14px}
+.chip .t span{color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loc-chip{flex:1}
+.icon-btn{pointer-events:auto;width:46px;height:46px;border-radius:14px;border:0;background:var(--surface);box-shadow:var(--shadow);display:grid;place-items:center;flex:none}
+.icon-btn svg{width:22px;height:22px}
+.map-tools{position:absolute;right:max(12px,env(safe-area-inset-right,0px));bottom:178px;display:flex;flex-direction:column;gap:8px;z-index:5}
+.maplabel{position:absolute;left:max(12px,env(safe-area-inset-left,0px));bottom:118px;z-index:5;font-size:11px;color:var(--muted);background:color-mix(in srgb,var(--surface) 85%,transparent);padding:4px 8px;border-radius:8px;max-width:32%}
+
+/* station sheet & mission panel */
+.sheet{position:absolute;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:176px;z-index:6;max-height:calc(100% - 250px);overflow:auto;background:var(--surface);border-radius:20px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:12px}
+.sheet .row{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.sheet h3{font-size:17px}
+.sheet .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.badge{font-size:12px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--drone-soft);color:var(--drone);white-space:nowrap}
+.badge.red{background:var(--accent-soft);color:var(--accent)}
+.badge.green{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--bg);border-radius:12px;padding:8px 10px}
+.stat small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.stat b{font-family:var(--f-display);font-size:17px;font-variant-numeric:tabular-nums}
+.steps{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.steps li{display:flex;gap:10px;align-items:center;font-size:14px;color:var(--muted)}
+.steps li i{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);flex:none;display:grid;place-items:center;font-style:normal;font-size:11px}
+.steps li.done{color:var(--fg)}
+.steps li.done i{background:var(--ok);border-color:var(--ok);color:#fff}
+.steps li.now{color:var(--fg);font-weight:600}
+.steps li.now i{border-color:var(--accent);background:var(--accent-soft)}
+.progress{height:6px;border-radius:6px;background:var(--bg);overflow:hidden}
+.progress span{display:block;height:100%;width:0;background:var(--drone);transition:width .3s linear}
+.callout{font-size:13px;line-height:1.45;color:var(--muted)}
+.callout b{color:var(--fg);user-select:all}
+.close-x{background:var(--bg);border:0;width:32px;height:32px;border-radius:10px;flex:none;font-size:18px;line-height:1}
+
+/* ---------- Bottom nav ---------- */
+.nav{position:absolute;left:0;right:0;bottom:0;z-index:8;background:var(--surface);border-top:1px solid var(--line);padding-top:30px;padding-bottom:max(10px,env(safe-area-inset-bottom,0px));padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:repeat(3,1fr)}
+.nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--muted);padding:6px 0}
+.nav button svg{width:24px;height:24px}
+.nav button[aria-current="page"]{color:var(--fg)}
+.nav button[aria-current="page"] svg{color:var(--accent)}
+.sos-wrap{position:absolute;left:50%;bottom:calc(64px + max(10px,env(safe-area-inset-bottom,0px)));transform:translateX(-50%);z-index:9;display:flex;flex-direction:column;align-items:center}
+.sos{position:relative;width:96px;height:96px;border-radius:50%;border:6px solid var(--surface);background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 30px color-mix(in srgb,var(--accent) 45%,transparent);display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-select:none}
+.sos b{font-family:var(--f-display);font-size:15px;font-weight:800;letter-spacing:.02em;position:relative;z-index:1}
+.sos svg.ring{position:absolute;inset:-6px;width:calc(100% + 12px);height:calc(100% + 12px);transform:rotate(-90deg)}
+.sos svg.ring circle{fill:none;stroke:var(--fg);stroke-width:6;stroke-dasharray:289;stroke-dashoffset:289}
+.sos.active{background:var(--fg);color:var(--bg)}
+.sos-hint{margin-top:2px;font-size:11px;font-weight:600;color:var(--muted);background:var(--surface);padding:2px 8px;border-radius:8px;white-space:nowrap}
+
+/* ---------- Settings / account ---------- */
+.page-h{display:flex;flex-direction:column;gap:4px;margin-bottom:18px}
+.page-h h2{font-size:24px;letter-spacing:-.02em}
+.page-h p{margin:0;color:var(--muted)}
+.group{background:var(--surface);border-radius:18px;border:1px solid var(--line);margin-bottom:16px;overflow:hidden}
+.group h3{font-size:12px;font-family:var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:14px 16px 4px}
+.item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 16px;border-top:1px solid var(--line)}
+.group h3 + .item{border-top:0}
+.item .l{min-width:0}
+.item .l b{display:block;font-weight:600}
+.item .l span{display:block;color:var(--muted);font-size:13px;margin-top:2px;line-height:1.4}
+.item select,.item input[type="text"],.item input[type="tel"]{height:40px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);padding:0 10px;max-width:46%;min-width:0}
+.tog{position:relative;width:50px;height:30px;flex:none}
+.tog input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.tog span{position:absolute;inset:0;border-radius:999px;background:var(--line);transition:background .2s}
+.tog span::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.tog input:checked + span{background:var(--ok)}
+.tog input:checked + span::after{transform:translateX(20px)}
+.tog input:focus-visible + span{outline:3px solid var(--me);outline-offset:2px}
+.profile{display:flex;gap:14px;align-items:center;padding:16px}
+.avatar{width:56px;height:56px;border-radius:18px;background:var(--drone-soft);color:var(--drone);display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:22px;flex:none}
+.profile b{font-size:18px;font-family:var(--f-display);display:block}
+.profile span{color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+.history{list-style:none;margin:0;padding:0}
+.history li{padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.history li span{color:var(--muted)}
+.empty{padding:12px 16px 16px;color:var(--muted);font-size:14px}
+.toast{position:absolute;left:50%;top:76px;transform:translateX(-50%);z-index:20;background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;box-shadow:var(--shadow);max-width:90%;text-align:center}
+</style>
+
+<div class="app" id="app">
+
+  <!-- Login -->
+  <section class="login" id="login">
+    <div class="brand">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="var(--drone)"/><circle cx="12" cy="12" r="5" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="36" cy="12" r="5" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="12" cy="36" r="5" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="36" cy="36" r="5" fill="none" stroke="#fff" stroke-width="2.5"/><rect x="16" y="16" width="16" height="16" rx="4" fill="var(--accent)"/><path d="M22.5 19h3v3.5H29v3h-3.5V29h-3v-3.5H19v-3h3.5z" fill="#fff"/></svg>
+      <div><b>Flugretter</b><small>Erste Hilfe aus der Luft</small></div>
+    </div>
+    <div>
+      <h1 id="loginTitle">Willkommen zurück</h1>
+      <p class="lead" id="loginLead">Melde dich an, damit im Notfall eine Drohne mit Verbandskasten zu deinem Standort fliegen kann.</p>
+    </div>
+    <form class="form" id="loginForm" novalidate>
+      <div class="field" id="nameField" hidden>
+        <label for="inName">Vor- und Nachname</label>
+        <input id="inName" autocomplete="name" placeholder="Max Mustermann">
+      </div>
+      <div class="field">
+        <label for="inMail">E-Mail</label>
+        <input id="inMail" type="email" autocomplete="email" placeholder="name@beispiel.at">
+      </div>
+      <div class="field">
+        <label for="inPw">Passwort</label>
+        <input id="inPw" type="password" autocomplete="current-password" placeholder="Mindestens 6 Zeichen">
+      </div>
+      <p class="err" id="loginErr"></p>
+      <button class="btn btn-primary" type="submit" id="loginBtn">Anmelden</button>
+      <button class="switch-link" type="button" id="switchMode">Noch kein Konto? Jetzt registrieren</button>
+    </form>
+    <p class="demo-note">Prototyp: Konten werden nur in diesem Browser gespeichert. Jede E-Mail mit einem Passwort ab 6 Zeichen funktioniert.</p>
+  </section>
+
+  <!-- Main app -->
+  <div class="views" id="main" hidden>
+    <section class="view" id="v-map">
+      <div class="map" id="map">
+        <canvas id="demoCanvas"></canvas>
+        <div class="tiles" id="tiles"></div>
+        <div class="layer"><svg id="routeSvg"></svg></div>
+        <div class="layer" id="markers"></div>
+      </div>
+      <div class="topbar">
+        <div class="chip loc-chip" id="locChip">
+          <i class="dot warn" id="locDot"></i>
+          <div class="t"><b id="locTitle">Standort wird gesucht …</b><span id="locSub">Bitte Standortfreigabe erlauben</span></div>
+        </div>
+        <button class="icon-btn" id="btnLocate" aria-label="Standort neu bestimmen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        </button>
+      </div>
+      <div class="map-tools">
+        <button class="icon-btn" id="zIn" aria-label="Hineinzoomen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="icon-btn" id="zOut" aria-label="Herauszoomen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+        <button class="icon-btn" id="btnCenter" aria-label="Auf mich zentrieren"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 21l8-4 8 4z"/></svg></button>
+      </div>
+      <div class="maplabel" id="mapLabel"></div>
+      <div class="sheet" id="sheet" hidden></div>
+    </section>
+
+    <section class="view scroll" id="v-settings" hidden>
+      <div class="page-h"><h2>Einstellungen</h2><p>Wie Flugretter dich im Notfall erreicht.</p></div>
+      <div class="group">
+        <h3>Standort</h3>
+        <div class="item"><div class="l"><b>Standortfreigabe</b><span id="setLocState">Wird geprüft …</span></div><button class="btn btn-ghost" style="height:40px;font-size:14px" id="setLocBtn">Prüfen</button></div>
+        <div class="item"><div class="l"><b>Standort im Hintergrund teilen</b><span>Nur während eines aktiven Notfalls</span></div><label class="tog"><input type="checkbox" id="tBg" checked><span></span></label></div>
+      </div>
+      <div class="group">
+        <h3>Notfall</h3>
+        <div class="item"><div class="l"><b>Auslösen durch</b><span>Schutz vor versehentlichem Drücken</span></div>
+          <select id="sTrigger" aria-label="Auslöseart"><option value="hold">2 Sek. halten</option><option value="tap">Antippen + bestätigen</option></select></div>
+        <div class="item"><div class="l"><b>Rettung 144 mit verständigen</b><span>Hinweis auf den Notruf im Einsatz anzeigen</span></div><label class="tog"><input type="checkbox" id="t144" checked><span></span></label></div>
+        <div class="item"><div class="l"><b>Notfallkontakt</b><span>Wird bei einem Einsatz informiert</span></div><input type="tel" id="sContact" placeholder="+43 …" aria-label="Notfallkontakt Telefonnummer"></div>
+      </div>
+      <div class="group">
+        <h3>App</h3>
+        <div class="item"><div class="l"><b>Benachrichtigungen</b><span>Status der Drohne als Mitteilung</span></div><label class="tog"><input type="checkbox" id="tPush" checked><span></span></label></div>
+        <div class="item"><div class="l"><b>Darstellung</b></div>
+          <select id="sTheme" aria-label="Darstellung"><option value="system">Wie System</option><option value="light">Hell</option><option value="dark">Dunkel</option></select></div>
+        <div class="item"><div class="l"><b>Simulation beschleunigen</b><span>Drohnenflug 4× schneller zeigen</span></div><label class="tog"><input type="checkbox" id="tFast"><span></span></label></div>
+        <div class="item"><div class="l"><b>Test-Standort in Pamhagen</b><span>Zum Ausprobieren, wenn du gerade nicht in Reichweite bist</span></div><label class="tog"><input type="checkbox" id="tTest"><span></span></label></div>
+      </div>
+    </section>
+
+    <section class="view scroll" id="v-account" hidden>
+      <div class="page-h"><h2>Konto</h2><p>Diese Angaben sieht das Einsatzteam.</p></div>
+      <div class="group"><div class="profile"><div class="avatar" id="avatar">?</div><div style="min-width:0"><b id="pName"></b><span id="pMail"></span></div></div></div>
+      <div class="group">
+        <h3>Medizinische Angaben</h3>
+        <div class="item"><div class="l"><b>Blutgruppe</b></div>
+          <select id="aBlood" aria-label="Blutgruppe"><option value="">Unbekannt</option><option>0+</option><option>0−</option><option>A+</option><option>A−</option><option>B+</option><option>B−</option><option>AB+</option><option>AB−</option></select></div>
+        <div class="item"><div class="l"><b>Allergien</b></div><input type="text" id="aAllergy" placeholder="z. B. Penicillin" aria-label="Allergien"></div>
+        <div class="item"><div class="l"><b>Vorerkrankungen</b></div><input type="text" id="aCond" placeholder="z. B. Diabetes" aria-label="Vorerkrankungen"></div>
+      </div>
+      <div class="group">
+        <h3>Letzte Einsätze</h3>
+        <ul class="history" id="history"></ul>
+      </div>
+      <button class="btn btn-ghost" style="width:100%" id="logout">Abmelden</button>
+    </section>
+
+    <div class="sos-wrap" id="sosWrap">
+      <button class="sos" id="sos" aria-label="Notfall auslösen">
+        <svg class="ring" viewBox="0 0 108 108" aria-hidden="true"><circle id="ring" cx="54" cy="54" r="46"/></svg>
+        <b id="sosLabel">NOTFALL</b>
+      </button>
+      <span class="sos-hint" id="sosHint">2 Sek. halten</span>
+    </div>
+    <nav class="nav" aria-label="Hauptnavigation">
+      <button data-view="v-map" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>Karte
+      </button>
+      <button data-view="v-settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Einstellungen
+      </button>
+      <button data-view="v-account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Konto
+      </button>
+    </nav>
+    <div class="toast" id="toast" hidden></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("fr_"+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem("fr_"+k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------------- Login ---------------- */
+let registerMode = false;
+let user = store.get("session", null);
+function setMode(reg){
+  registerMode = reg;
+  $("nameField").hidden = !reg;
+  $("loginTitle").textContent = reg ? "Konto erstellen" : "Willkommen zurück";
+  $("loginBtn").textContent = reg ? "Registrieren" : "Anmelden";
+  $("switchMode").textContent = reg ? "Schon ein Konto? Anmelden" : "Noch kein Konto? Jetzt registrieren";
+  $("inPw").autocomplete = reg ? "new-password" : "current-password";
+  $("loginErr").textContent = "";
+}
+$("switchMode").onclick = () => setMode(!registerMode);
+$("loginForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const mail = $("inMail").value.trim().toLowerCase(), pw = $("inPw").value, name = $("inName").value.trim();
+  const err = $("loginErr");
+  if(!/^\S+@\S+\.\S+$/.test(mail)){ err.textContent = "Bitte gib eine gültige E-Mail-Adresse ein."; return; }
+  if(pw.length < 6){ err.textContent = "Das Passwort braucht mindestens 6 Zeichen."; return; }
+  const accounts = store.get("accounts", {});
+  if(registerMode){
+    if(!name){ err.textContent = "Bitte gib deinen Namen ein."; return; }
+    accounts[mail] = { name, pw: btoa(unescape(encodeURIComponent(pw))) };
+    store.set("accounts", accounts);
+  } else if(accounts[mail] && accounts[mail].pw !== btoa(unescape(encodeURIComponent(pw)))){
+    err.textContent = "E-Mail oder Passwort stimmt nicht."; return;
+  } else if(!accounts[mail]){
+    accounts[mail] = { name: mail.split("@")[0].replace(/[._-]+/g," ").replace(/\b\w/g,c=>c.toUpperCase()), pw: btoa(unescape(encodeURIComponent(pw))) };
+    store.set("accounts", accounts);
+  }
+  user = { mail, name: accounts[mail].name };
+  store.set("session", user);
+  enterApp();
+});
+$("logout").onclick = () => { store.set("session", null); user = null; $("main").hidden = true; $("login").hidden = false; setMode(false); };
+
+function enterApp(){
+  $("login").hidden = true; $("main").hidden = false;
+  $("pName").textContent = user.name; $("pMail").textContent = user.mail;
+  $("avatar").textContent = (user.name || "?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+  map.resize(); locate();
+}
+
+/* ---------------- Settings ---------------- */
+const settings = Object.assign({ trigger:"hold", s144:true, contact:"", push:true, bg:true, theme:"system", fast:false, testLoc:false, blood:"", allergy:"", cond:"" }, store.get("settings", {}));
+const bind = [["sTrigger","trigger","value"],["t144","s144","checked"],["sContact","contact","value"],["tPush","push","checked"],["tBg","bg","checked"],["sTheme","theme","value"],["tFast","fast","checked"],["tTest","testLoc","checked"],["aBlood","blood","value"],["aAllergy","allergy","value"],["aCond","cond","value"]];
+bind.forEach(([id,key,prop]) => { const el = $(id); el[prop] = settings[key]; el.addEventListener("change", () => { settings[key] = el[prop]; store.set("settings", settings); applySettings(); if(key === "testLoc" && user && !mission) locate(); }); });
+function applySettings(){
+  if(settings.theme === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", settings.theme);
+  $("sosHint").textContent = settings.trigger === "hold" ? "2 Sek. halten" : "Antippen";
+  map.draw();
+}
+
+/* ---------------- Geo helpers ---------------- */
+const TILE = 256;
+function project(lat, lon, z){ const s = TILE * Math.pow(2, z); const r = lat*Math.PI/180;
+  return { x:(lon+180)/360*s, y:(1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI)/2*s }; }
+function unproject(x, y, z){ const s = TILE * Math.pow(2, z); const lon = x/s*360-180; const n = Math.PI - 2*Math.PI*y/s;
+  return { lat: 180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n))), lon }; }
+function offset(p, northM, eastM){ return { lat: p.lat + northM/111320, lon: p.lon + eastM/(111320*Math.cos(p.lat*Math.PI/180)) }; }
+function dist(a, b){ const R=6371000, t=Math.PI/180, dLa=(b.lat-a.lat)*t, dLo=(b.lon-a.lon)*t;
+  const h = Math.sin(dLa/2)**2 + Math.cos(a.lat*t)*Math.cos(b.lat*t)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+const fmtDist = m => m < 1000 ? Math.round(m/10)*10 + " m" : (m/1000).toFixed(1).replace(".",",") + " km";
+const fmtTime = s => { s = Math.max(0, Math.round(s)); return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); };
+const DRONE_SPEED = 22; // m/s, ~80 km/h
+
+/* ---------------- State ---------------- */
+const MAX_RANGE = 25000; // m, Reichweite einer Drohne
+// Echte Stützpunkte. Koordinaten sind ein Näherungswert und werden beim Start per OpenStreetMap-Adresssuche präzisiert.
+const STATIONS = [
+  { id:"pamhagen", name:"Sportplatzgasse 16", sub:"7152 Pamhagen", query:"Sportplatzgasse 16, 7152 Pamhagen, Österreich", fallbackQuery:"Sportplatzgasse, Pamhagen, Österreich", drones:1, lat:47.7031, lon:16.9086 }
+];
+let me = null, locMode = "pending"; // gps | test | none
+let stations = [];
+let mission = null;
+let selected = null;
+let watchId = null;
+
+function testLocation(){ return offset(STATIONS[0], -650, 480); }
+function buildStations(){
+  stations = STATIONS.map(s => ({ ...s, d: me ? dist(me, s) : Infinity }));
+}
+async function geocodeStations(){
+  const cache = store.get("geo", {});
+  for(const s of STATIONS){
+    if(cache[s.id]){ s.lat = cache[s.id].lat; s.lon = cache[s.id].lon; continue; }
+    for(const q of [s.query, s.fallbackQuery]){
+      try{
+        const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=at&q=" + encodeURIComponent(q), { headers:{ "Accept-Language":"de" } });
+        const j = await r.json();
+        if(j && j[0]){ s.lat = +j[0].lat; s.lon = +j[0].lon; cache[s.id] = { lat:s.lat, lon:s.lon }; store.set("geo", cache); break; }
+      }catch(e){ break; }
+    }
+  }
+  if(me) setMe(me, locMode, true); else { buildStations(); map.draw(); }
+}
+
+/* ---------------- Map ---------------- */
+const map = (() => {
+  const el = $("map"), tilesEl = $("tiles"), canvas = $("demoCanvas"), markersEl = $("markers"), svg = $("routeSvg");
+  let z = 15, cx = 0, cy = 0, w = 0, h = 0, tilesOk = null, tileFails = 0, tileLoads = 0;
+  const imgCache = new Map();
+  function resize(){ const r = el.getBoundingClientRect(); w = r.width; h = r.height; const dpr = window.devicePixelRatio||1; canvas.width = w*dpr; canvas.height = h*dpr; canvas.style.width = w+"px"; canvas.style.height = h+"px"; draw(); }
+  function center(p){ const q = project(p.lat, p.lon, z); cx = q.x; cy = q.y + 60; draw(); }
+  function toScreen(p){ const q = project(p.lat, p.lon, z); return { x: q.x - cx + w/2, y: q.y - cy + h/2 }; }
+  function hash(a, b){ let n = (a*374761393 + b*668265263) ^ (z*2246822519); n = (n ^ (n >>> 13)) * 1274126177; return ((n ^ (n >>> 16)) >>> 0) / 4294967295; }
+  function drawDemo(){
+    const ctx = canvas.getContext("2d"), dpr = window.devicePixelRatio||1, cs = getComputedStyle(document.documentElement);
+    const col = n => cs.getPropertyValue(n).trim();
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.fillStyle = col("--map-land"); ctx.fillRect(0,0,w,h);
+    const B = 110 * Math.pow(2, z-15); // block size in px
+    const x0 = Math.floor((cx - w/2)/B) - 1, x1 = Math.ceil((cx + w/2)/B) + 1, y0 = Math.floor((cy - h/2)/B) - 1, y1 = Math.ceil((cy + h/2)/B) + 1;
+    const ox = w/2 - cx, oy = h/2 - cy, road = Math.max(4, B*0.09);
+    for(let i=x0;i<=x1;i++) for(let j=y0;j<=y1;j++){
+      const r = hash(i,j), X = i*B+ox, Y = j*B+oy;
+      ctx.fillStyle = r < 0.12 ? col("--map-park") : r < 0.15 ? col("--map-water") : col("--map-block");
+      const inset = road/2 + 2;
+      if(r >= 0.15 && r < 0.55 && B > 80){ // split into buildings
+        const hw = (B - inset*2 - 4)/2;
+        for(let a=0;a<2;a++) for(let b=0;b<2;b++){ ctx.beginPath(); ctx.roundRect(X+inset+a*(hw+4), Y+inset+b*(hw+4), hw, hw, 3); ctx.fill(); }
+      } else { ctx.beginPath(); ctx.roundRect(X+inset, Y+inset, B-inset*2, B-inset*2, 4); ctx.fill(); }
+    }
+    for(let i=x0;i<=x1;i++){ const major = ((i%4)+4)%4 === 0; ctx.fillStyle = major ? col("--map-major") : col("--map-road"); const X = i*B+ox; ctx.fillRect(X - (major?road*0.8:road/2), 0, major?road*1.6:road, h); }
+    for(let j=y0;j<=y1;j++){ const major = ((j%5)+5)%5 === 0; ctx.fillStyle = major ? col("--map-major") : col("--map-road"); const Y = j*B+oy; ctx.fillRect(0, Y - (major?road*0.8:road/2), w, major?road*1.6:road); }
+  }
+  function drawTiles(){
+    const n = Math.pow(2, z), x0 = Math.floor((cx - w/2)/TILE), x1 = Math.floor((cx + w/2)/TILE), y0 = Math.floor((cy - h/2)/TILE), y1 = Math.floor((cy + h/2)/TILE);
+    const keep = new Set();
+    for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){
+      if(y<0||y>=n) continue; const xx = ((x%n)+n)%n, key = z+"/"+xx+"/"+y; keep.add(key);
+      let img = imgCache.get(key);
+      if(!img){ img = new Image(); img.alt = ""; img.draggable = false;
+        img.onload = () => { tileLoads++; if(tilesOk !== true){ tilesOk = true; updateLabel(); } };
+        img.onerror = () => { tileFails++; if(tileFails >= 2 && !tileLoads){ tilesOk = false; tilesEl.hidden = true; updateLabel(); } };
+        img.src = "https://tile.openstreetmap.org/" + key + ".png"; imgCache.set(key, img); tilesEl.appendChild(img); }
+      img.style.left = (x*TILE - cx + w/2) + "px"; img.style.top = (y*TILE - cy + h/2) + "px";
+    }
+    imgCache.forEach((img, key) => { if(!keep.has(key)){ img.remove(); imgCache.delete(key); } });
+  }
+  function updateLabel(){ $("mapLabel").textContent = tilesOk ? "Karte © OpenStreetMap-Mitwirkende" : tilesOk === false ? "Vereinfachte Karte (Kartendienst hier nicht erreichbar)" : ""; }
+  function svgEl(tag, attrs){ const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+  function draw(){
+    if(!w) return;
+    if(tilesOk !== false) drawTiles();
+    drawDemo();
+    markersEl.textContent = ""; svg.textContent = "";
+    if(mission){
+      const a = toScreen(mission.st), b = toScreen(me);
+      svg.appendChild(svgEl("line", { x1:a.x, y1:a.y, x2:b.x, y2:b.y, stroke:"var(--drone)", "stroke-width":3, "stroke-dasharray":"2 8", "stroke-linecap":"round" }));
+    }
+    stations.forEach(s => {
+      const p = toScreen(s); const b = document.createElement("button");
+      b.className = "mk mk-st"; b.style.left = p.x+"px"; b.style.top = p.y+"px"; b.setAttribute("aria-label", "Stützpunkt " + s.name);
+      b.innerHTML = '<span class="pin"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="9" y="9" width="6" height="6" rx="1.5"/><path d="M9 9 5 5M15 9l4-4M9 15l-4 4M15 15l4 4"/><circle cx="5" cy="5" r="2.2"/><circle cx="19" cy="5" r="2.2"/><circle cx="5" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2"/></svg></span><span class="tag"></span>';
+      b.querySelector(".tag").textContent = s.name;
+      b.addEventListener("click", ev => { ev.stopPropagation(); if(!mission){ selected = s; renderSheet(); } });
+      markersEl.appendChild(b);
+    });
+    if(!me) return;
+    const mp = toScreen(me); const m = document.createElement("div"); m.className = "mk mk-me"; m.style.left = mp.x+"px"; m.style.top = mp.y+"px"; m.title = "Mein Standort"; markersEl.appendChild(m);
+    if(mission && mission.pos){
+      const dp = toScreen(mission.pos); const d = document.createElement("div"); d.className = "mk mk-drone"; d.style.left = dp.x+"px"; d.style.top = dp.y+"px";
+      d.innerHTML = '<svg viewBox="0 0 32 32"><g fill="var(--drone)"><rect x="12" y="12" width="8" height="8" rx="2"/><path d="M12 12 7 7M20 12l5-5M12 20l-5 5M20 20l5 5" stroke="var(--drone)" stroke-width="2"/></g><g fill="none" stroke="var(--drone)" stroke-width="1.6"><ellipse class="rot" cx="7" cy="7" rx="5" ry="1.4"/><ellipse class="rot" cx="25" cy="7" rx="5" ry="1.4"/><ellipse class="rot" cx="7" cy="25" rx="5" ry="1.4"/><ellipse class="rot" cx="25" cy="25" rx="5" ry="1.4"/></g><path d="M14.5 15h3v-1.5h1.5v3h-1.5V18h-3v-1.5H13v-3h1.5z" fill="#fff" transform="translate(0 0.5)"/></svg>';
+      markersEl.appendChild(d);
+    }
+  }
+  // pan
+  let drag = null;
+  el.addEventListener("pointerdown", e => { if(e.target.closest(".mk-st")) return; drag = { x:e.clientX, y:e.clientY, cx, cy, moved:false }; el.setPointerCapture(e.pointerId); el.classList.add("dragging"); });
+  el.addEventListener("pointermove", e => { if(!drag) return; const dx = e.clientX-drag.x, dy = e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy) > 4) drag.moved = true; cx = drag.cx - dx; cy = drag.cy - dy; draw(); });
+  el.addEventListener("pointerup", e => {
+    el.classList.remove("dragging"); if(!drag) return; const moved = drag.moved; drag = null;
+    if(!moved && selected){ selected = null; renderSheet(); }
+  });
+  el.addEventListener("wheel", e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1 : -1); }, { passive:false });
+  function zoom(dz){ const nz = Math.min(18, Math.max(12, z+dz)); if(nz === z) return; const f = Math.pow(2, nz-z); cx *= f; cy *= f; z = nz; tilesEl.textContent = ""; imgCache.clear(); draw(); }
+  window.addEventListener("resize", resize);
+  return { resize, center, draw, zoom };
+})();
+$("zIn").onclick = () => map.zoom(1);
+$("zOut").onclick = () => map.zoom(-1);
+$("btnCenter").onclick = () => me && map.center(me);
+
+/* ---------------- Location ---------------- */
+function nearest(){ return stations.slice().sort((a,b)=>a.d-b.d)[0]; }
+function setMe(p, mode, keepView){
+  const first = !me || locMode !== mode;
+  me = { lat:p.lat, lon:p.lon }; locMode = mode; buildStations();
+  const near = nearest(), inRange = near.d <= MAX_RANGE;
+  $("locDot").className = "dot" + (mode === "gps" && inRange ? "" : " warn");
+  $("locTitle").textContent = mode === "gps" ? "Standort aktiv" : "Test-Standort Pamhagen";
+  $("locSub").textContent = (inRange ? "Nächste Drohne: " : "Außer Reichweite: ") + near.name + " · " + fmtDist(near.d);
+  $("setLocState").textContent = mode === "gps" ? "Freigegeben, wird automatisch aktualisiert" : "Test-Standort aktiv";
+  if(keepView || !first) map.draw(); else map.center(me);
+}
+function noLocation(msg){
+  locMode = "none"; me = null; buildStations();
+  $("locDot").className = "dot warn"; $("locTitle").textContent = "Standort nicht verfügbar"; $("locSub").textContent = msg;
+  $("setLocState").textContent = msg;
+  map.center(STATIONS[0]);
+}
+function locate(){
+  if(watchId != null && navigator.geolocation){ navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if(settings.testLoc){ setMe(testLocation(), "test"); return; }
+  $("locTitle").textContent = "Standort wird gesucht …"; $("locSub").textContent = "Bitte die Standortabfrage erlauben";
+  if(!navigator.geolocation){ noLocation("Dieser Browser kann keinen Standort liefern"); return; }
+  try{
+    watchId = navigator.geolocation.watchPosition(
+      pos => setMe({ lat:pos.coords.latitude, lon:pos.coords.longitude }, "gps"),
+      err => { if(locMode !== "gps") noLocation(err.code === 1 ? "Standort blockiert. Bitte im Browser erlauben." : "Kein GPS-Signal. Bitte erneut versuchen."); },
+      { enableHighAccuracy:true, timeout:15000, maximumAge:10000 });
+  }catch(e){ noLocation("Standort blockiert. Bitte im Browser erlauben."); }
+}
+$("btnLocate").onclick = locate;
+$("setLocBtn").onclick = () => { locate(); toast("Standort wird neu bestimmt"); };
+
+/* ---------------- Sheet ---------------- */
+function renderSheet(){
+  const sh = $("sheet");
+  if(mission){
+    const m = mission, left = Math.max(0, m.total - m.flown), eta = left / DRONE_SPEED;
+    const steps = [["Notruf empfangen", 0], ["Drohne startet mit Verbandskasten", 1], ["Im Anflug auf deinen Standort", 2], ["Verbandskasten abgesetzt", 3]];
+    sh.innerHTML =
+      '<div class="row"><div><h3></h3><div class="sub"></div></div><span class="badge"></span></div>' +
+      '<div class="stats"><div class="stat"><small>Ankunft</small><b class="eta"></b></div><div class="stat"><small>Entfernung</small><b class="left"></b></div><div class="stat"><small>Tempo</small><b>80 km/h</b></div></div>' +
+      '<div class="progress"><span></span></div><ol class="steps"></ol>' +
+      (settings.s144 && m.phase < 3 ? '<p class="callout">Bei Bewusstlosigkeit oder starker Blutung zusätzlich die Rettung anrufen: <b>144</b> (Euronotruf <b>112</b>).</p>' : '') +
+      '<button class="btn ' + (m.phase < 3 ? 'btn-ghost' : 'btn-primary') + ' act"></button>';
+    sh.querySelector("h3").textContent = m.phase < 3 ? "Hilfe ist unterwegs" : "Verbandskasten ist da";
+    sh.querySelector(".sub").textContent = "Drohne von " + m.st.name;
+    const badge = sh.querySelector(".badge"); badge.textContent = m.phase < 3 ? "Einsatz läuft" : "Angekommen"; badge.className = "badge " + (m.phase < 3 ? "red" : "green");
+    sh.querySelector(".eta").textContent = m.phase < 3 ? fmtTime(eta) : "jetzt";
+    sh.querySelector(".left").textContent = fmtDist(left);
+    sh.querySelector(".progress span").style.width = Math.min(100, m.flown/m.total*100) + "%";
+    const ol = sh.querySelector(".steps");
+    steps.forEach(([t, i]) => { const li = document.createElement("li"); li.className = i < m.phase || m.phase === 3 ? "done" : i === m.phase ? "now" : ""; li.innerHTML = "<i>" + (li.className === "done" ? "✓" : "") + "</i>"; li.append(t); ol.appendChild(li); });
+    const act = sh.querySelector(".act"); act.textContent = m.phase < 3 ? "Einsatz abbrechen" : "Fertig";
+    act.onclick = m.phase < 3 ? cancelMission : endMission;
+    sh.hidden = false; return;
+  }
+  if(selected){
+    const s = selected;
+    sh.innerHTML = '<div class="row"><div><h3></h3><div class="sub"></div></div><button class="close-x" aria-label="Schließen">×</button></div>' +
+      '<div class="stats"><div class="stat"><small>Entfernung</small><b class="d"></b></div><div class="stat"><small>Flugzeit</small><b class="t"></b></div><div class="stat"><small>Drohnen</small><b class="n"></b></div></div>' +
+      '<p class="callout">Ausstattung: Verbandskasten nach ÖNORM, Rettungsdecke, Einmalhandschuhe.</p>';
+    sh.querySelector("h3").textContent = s.name; sh.querySelector(".sub").textContent = s.sub + " · einsatzbereit";
+    const known = isFinite(s.d); sh.querySelector(".d").textContent = known ? fmtDist(s.d) : "–"; sh.querySelector(".t").textContent = !known ? "–" : s.d > MAX_RANGE ? "zu weit" : fmtTime(s.d/DRONE_SPEED); sh.querySelector(".n").textContent = s.drones + " bereit";
+    sh.querySelector(".close-x").onclick = () => { selected = null; renderSheet(); };
+    sh.hidden = false; return;
+  }
+  sh.hidden = true;
+}
+
+/* ---------------- Emergency ---------------- */
+let raf = 0, last = 0;
+function startMission(){
+  if(mission) return;
+  showView("v-map");
+  if(!me){ toast("Ohne Standort kann keine Drohne starten. Bitte Standort erlauben oder 144 anrufen."); locate(); return; }
+  const st = nearest();
+  if(st.d > MAX_RANGE){ toast("Kein Stützpunkt in Reichweite (" + fmtDist(st.d) + "). Bitte 144 anrufen."); return; }
+  mission = { st, total: st.d, flown: 0, phase: 0, pos: { lat:st.lat, lon:st.lon }, started: Date.now() };
+  selected = null;
+  $("sos").classList.add("active"); $("sosLabel").textContent = "AKTIV"; $("sosHint").textContent = "Einsatz läuft";
+  if(navigator.vibrate) try{ navigator.vibrate([200,100,200]); }catch(e){}
+  map.center(me); renderSheet();
+  setTimeout(() => { if(!mission) return; mission.phase = 1; renderSheet(); setTimeout(() => { if(!mission) return; mission.phase = 2; last = performance.now(); raf = requestAnimationFrame(tick); renderSheet(); }, 1500); }, 1200);
+}
+function tick(now){
+  if(!mission) return;
+  const dt = (now - last)/1000; last = now;
+  mission.flown = Math.min(mission.total, mission.flown + dt * DRONE_SPEED * (settings.fast ? 4 : 1));
+  const f = mission.flown / mission.total;
+  mission.pos = { lat: mission.st.lat + (me.lat - mission.st.lat)*f, lon: mission.st.lon + (me.lon - mission.st.lon)*f };
+  map.draw();
+  if(!tick.n || now - tick.n > 250){ tick.n = now; renderSheet(); }
+  if(f >= 1){ mission.phase = 3; renderSheet(); logMission("Zugestellt"); toast("Verbandskasten wurde abgesetzt"); return; }
+  raf = requestAnimationFrame(tick);
+}
+function cancelMission(){ if(!mission) return; logMission("Abgebrochen"); cancelAnimationFrame(raf); endMission(); toast("Einsatz abgebrochen"); }
+function endMission(){ cancelAnimationFrame(raf); mission = null; $("sos").classList.remove("active"); $("sosLabel").textContent = "NOTFALL"; applySettings(); renderSheet(); }
+function logMission(result){
+  const h = store.get("history", []); h.unshift({ at: Date.now(), from: mission.st.name, result, sec: Math.round((Date.now()-mission.started)/1000) }); store.set("history", h.slice(0,10)); renderHistory();
+}
+function renderHistory(){
+  const ul = $("history"), h = store.get("history", []); ul.textContent = "";
+  if(!h.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = "Noch keine Einsätze. Hoffentlich bleibt das so."; ul.appendChild(li); return; }
+  h.forEach(x => { const li = document.createElement("li"); const d = new Date(x.at);
+    const l = document.createElement("div"); l.textContent = x.from; const r = document.createElement("span");
+    r.textContent = d.toLocaleDateString("de-AT") + " " + d.toLocaleTimeString("de-AT",{hour:"2-digit",minute:"2-digit"}) + " · " + x.result; li.append(l, r); ul.appendChild(li); });
+}
+
+// hold-to-trigger
+const ring = $("ring"), sos = $("sos"); let holdStart = 0, holdRaf = 0, confirmArmed = false;
+function resetRing(){ cancelAnimationFrame(holdRaf); holdStart = 0; ring.style.strokeDashoffset = 289; }
+sos.addEventListener("pointerdown", e => {
+  if(mission){ showView("v-map"); return; }
+  if(settings.trigger !== "hold") return;
+  e.preventDefault(); holdStart = performance.now();
+  const step = t => { const p = Math.min(1, (t - holdStart)/2000); ring.style.strokeDashoffset = 289*(1-p); if(p >= 1){ resetRing(); startMission(); return; } holdRaf = requestAnimationFrame(step); };
+  holdRaf = requestAnimationFrame(step);
+});
+["pointerup","pointerleave","pointercancel"].forEach(ev => sos.addEventListener(ev, () => { if(holdStart){ resetRing(); if(settings.trigger === "hold" && !mission) toast("Zum Auslösen 2 Sekunden gedrückt halten"); } }));
+sos.addEventListener("click", () => {
+  if(mission || settings.trigger !== "tap") return;
+  if(!confirmArmed){ confirmArmed = true; $("sosHint").textContent = "Nochmal tippen zum Bestätigen"; $("sosLabel").textContent = "SICHER?"; setTimeout(() => { if(confirmArmed){ confirmArmed = false; if(!mission){ $("sosLabel").textContent = "NOTFALL"; applySettings(); } } }, 3000); return; }
+  confirmArmed = false; startMission();
+});
+sos.addEventListener("keydown", e => { if((e.key === "Enter" || e.key === " ") && settings.trigger === "hold" && !mission){ e.preventDefault(); startMission(); } });
+sos.addEventListener("contextmenu", e => e.preventDefault());
+
+/* ---------------- Nav ---------------- */
+function showView(id){
+  ["v-map","v-settings","v-account"].forEach(v => $(v).hidden = v !== id);
+  document.querySelectorAll(".nav button").forEach(b => { if(b.dataset.view === id) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  if(id === "v-map") map.resize();
+}
+document.querySelectorAll(".nav button").forEach(b => b.onclick = () => showView(b.dataset.view));
+
+let toastT = 0;
+function toast(msg){ const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+
+/* ---------------- Boot ---------------- */
+applySettings(); renderHistory();
+if(user){ enterApp(); } else { setMode(false); }
+geocodeStations();
+})();
+</script>
+
+</body>
+</html>
